@@ -1,0 +1,79 @@
+version: "3.4"
+
+# Docker stack for a home cloud ingress and DNS
+#
+# Optionally enable the Traefik web UI by uncommenting the port.
+# Replace $LOAD_BALANCER with your load balancer's IP address in traefik.toml.
+# Replace yourdomain.com with your own domain name.
+# Replace $SERVER_A and $SERVER_B with your Docker Swarm node IP addresses.
+#   Change the number of servers to suit your needs.
+# Don't forget to create an external overlay network:
+#   docker network create --driver=overlay web
+# And copy in the traefik.toml
+#   docker run --rm -v "$PWD":/conf -v proxy_traefik:/data --volume-driver=convoy alpine sh -c 'cp /conf/traefik.toml /data/'
+#
+# Deploy this stack with `docker stack deploy -c docker-compose.yml proxy`
+
+networks:
+  web:
+    external: true
+
+# I use Convoy for shared Docker volumes
+# Convoy setup tutorial: https://johnstarich.com/2019/03/24/Shared-volumes-in-Docker/
+volumes:
+  traefik:
+    driver: convoy
+
+services:
+  traefik:
+    image: traefik:1.7
+    command: ["--configfile=/data/traefik.toml"]
+    ports:
+    - "80:80"
+    - "443:443"
+    # Optional: Traefik dashboard port
+    # This is not exposed on the load balancer, but is nice to have internally
+    #- "8080:8080"
+    networks:
+    - web
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - traefik:/data
+    deploy:
+      mode: replicated
+      replicas: 3
+      update_config:
+        order: start-first
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: 10M
+      placement:
+        constraints:
+        - node.role == manager
+    healthcheck:
+      test: ["CMD", "/traefik", "healthcheck", "--configfile=/data/traefik.toml"]
+
+  dns:
+    image: johnstarich/dns:0.1
+    ports:
+    - "53:53/tcp"
+    - "53:53/udp"
+    deploy:
+      # I like to ensure DNS is running everywhere. It helps when rebalancing containers onto new hosts.
+      mode: global
+      update_config:
+        order: start-first
+      resources:
+        reservations:
+          cpus: '0.1'
+          memory: 10M
+    # CloudFlare DNS
+    dns:
+    - 1.0.0.1
+    - 1.1.1.1
+    extra_hosts:
+    - "yourdomain.com:$SERVER_A"
+    - "yourdomain.com:$SERVER_B"
+    - "www.yourdomain.com:$SERVER_A"
+    - "www.yourdomain.com:$SERVER_B"

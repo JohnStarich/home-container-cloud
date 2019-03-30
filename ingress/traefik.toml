@@ -1,0 +1,60 @@
+# Traefik config for an HTTP(S) proxy to back-end containers
+#
+# Replace $LOAD_BALANCER with your load balancer's IP address.
+# Replace yourdomain.com with your own domain name.
+# Replace the email address with your own.
+# Don't use this config for an HA Traefik setup. Follow this doc for that: https://docs.traefik.io/user-guide/cluster/
+
+logLevel = "INFO"
+defaultEntryPoints = ["https","http"]
+
+[entryPoints]
+  [entryPoints.http]
+  address = ":80"
+    [entryPoints.http.redirect]
+    entryPoint = "https"
+  [entryPoints.https]
+  address = ":443"
+  [entryPoints.https.tls]
+  # Enable proxy protocol support (properly detect IP addresses)
+  [entryPoints.http.proxyProtocol]
+    # List of trusted IPs = [local, load balancer IP]
+    trustedIPs = ["127.0.0.1/32", "$LOAD_BALANCER"]
+    # Insecure mode FOR TESTING ENVIRONMENT ONLY
+    # insecure = true
+
+[api]
+dashboard = true
+
+[ping]
+
+[retry]
+
+[docker]
+endpoint = "unix:///var/run/docker.sock"
+domain = "yourdomain.com"
+# Auto-detect and react to changes
+watch = true
+# Require services to explicitly opt-in to Traefik
+exposedByDefault = false
+swarmMode = true
+network = "web"
+# Add an ingress tag constraint to support multiple, separate Traefik services deployed in Docker.
+# Any service using this ingress Traefik service must have this tag.
+constraints = ["tag==ingress"]
+
+# Let's Encrypt config
+[acme]
+email = "YourEmailAddress@gmail.com"
+# Store Let's Encrypt certs on the shared volume
+storage = "/data/acme.json"
+entryPoint = "https"
+onHostRule = true
+acmeLogging = true
+
+# Let's Encrypt staging server (enable to test it out and avoid rate limiting)
+#caServer = "https://acme-staging-v02.api.letsencrypt.org/directory"
+
+# Use the Let's Encrypt HTTP challenge type.
+[acme.httpChallenge]
+entryPoint = "http"

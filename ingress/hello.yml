@@ -1,0 +1,25 @@
+version: "3"
+
+# Docker stack for a "hello world" service hooked up to Traefik
+#
+# Replace yourdomain.com with your own domain name.
+#
+# Deploy this stack with `docker stack deploy -c hello.yml hello`
+
+networks:
+  web:
+    external: true
+
+services:
+  hello:
+    image: tutum/hello-world:latest
+    networks:
+    - default
+    - web
+    deploy:
+      replicas: 3
+      labels:
+      - "traefik.tags=ingress"
+      - "traefik.enable=true"
+      - "traefik.port=80"
+      - "traefik.frontend.rule=Host:www.yourdomain.com"
